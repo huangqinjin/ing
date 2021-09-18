@@ -27,6 +27,11 @@ macro(ing_add_library name)
 endmacro()
 
 
+find_package(Boost REQUIRED COMPONENTS
+)
+
+ing_add_interface(source_location Boost::headers)
+
 
 if(BUILD_TESTING)
     enable_testing()

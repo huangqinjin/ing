@@ -12,3 +12,5 @@ macro(ing_add_test name)
 endmacro()
 
 
+ing_add_test(source_location test_std_source_location.cpp)
+
