@@ -1,0 +1,70 @@
+{
+  "version": 2,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 21,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "default",
+      "displayName": "Default Config",
+      "description": "Default config using Ninja generator",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/cmake-build-${presetName}",
+      "cacheVariables": {
+        "BUILD_TESTING": "ON",
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "windows-default",
+      "inherits": "default",
+      "displayName": "Windows x64 Config",
+      "description": "Target Windows with the Visual Studio development environment.",
+      "architecture": {
+        "value": "x64",
+        "strategy": "external"
+      },
+      "vendor": {
+        "microsoft.com/VisualStudioSettings/CMake/1.0": {
+          "hostOS": [
+            "Windows"
+          ]
+        }
+      },
+      "cacheVariables": {
+        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "default",
+      "displayName": "Default Build",
+      "configurePreset": "default"
+    },
+    {
+      "name": "windows-default",
+      "inherits": "default",
+      "displayName": "Windows Default Build",
+      "configurePreset": "windows-default"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "default",
+      "displayName": "Default Test",
+      "configurePreset": "default",
+      "output": {
+        "verbosity": "verbose"
+      }
+    },
+    {
+      "name": "windows-default",
+      "inherits": "default",
+      "displayName": "Windows Default Test",
+      "configurePreset": "windows-default"
+    }
+  ]
+}
