@@ -28,9 +28,13 @@ endmacro()
 
 
 find_package(Boost REQUIRED COMPONENTS
+    timer
 )
 
 ing_add_interface(source_location Boost::headers)
+
+ing_add_library(uptime src/uptime.cpp)
+target_link_libraries(${PROJECT_NAME} PUBLIC Boost::timer)
 
 
 if(BUILD_TESTING)
