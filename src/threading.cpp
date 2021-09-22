@@ -5,6 +5,12 @@
 #include <sstream>
 #include <unordered_map>
 
+#include <cstring>
+
+#if defined(__linux__) || defined(__APPLE__)
+#include <pthread.h>
+#endif
+
 using namespace ing;
 
 namespace
@@ -31,7 +37,8 @@ namespace
         thread_name() noexcept
         {
             auto id = std::this_thread::get_id();
-            auto name = def(id);
+            auto name = get_platform(id);
+            if (name.empty()) name = def(id);
             map tmp = { {id, name} };
             if (auto node = tmp.extract(tmp.begin()))
             {
@@ -69,6 +76,35 @@ namespace
         {
             return string((std::ostringstream{} << std::hex << id).str());
         }
+
+        // https://stackoverflow.com/questions/2369738
+        static bool set_platform(std::thread::id id, std::string_view name)
+        {
+#if defined(__linux__) || defined(__APPLE__)
+            static_assert(sizeof(pthread_t) == sizeof(std::thread::id));
+            char buf[16]{};
+            std::memcpy(buf, name.data(), std::min(sizeof(buf) - 1, name.size()));
+
+#  if defined(__APPLE__)
+            return id == std::this_thread::get_id() && 0 == pthread_setname_np(buf);
+#  else
+            return 0 == pthread_setname_np(reinterpret_cast<pthread_t&>(id), buf);
+#  endif
+#else
+            return false;
+#endif
+        }
+
+        static string get_platform(std::thread::id id)
+        {
+#if defined(__linux__) || defined(__APPLE__)
+            char buf[16]{};
+            pthread_getname_np(reinterpret_cast<pthread_t&>(id), buf, sizeof(buf));
+            return buf;
+#else
+            return {};
+#endif
+        }
     };
 
     thread_local thread_name current;
@@ -76,11 +112,13 @@ namespace
 
 void ing::set_thread_name(string name) noexcept
 {
+    thread_name::set_platform(std::this_thread::get_id(), name);
     current.entry->second.swap(name);
 }
 
 void ing::set_thread_name(std::thread::id id, string name) noexcept
 {
+    thread_name::set_platform(id, name);
     thread_name::set(id, std::move(name));
 }
 
@@ -92,4 +130,9 @@ string ing::get_thread_name() noexcept
 string ing::get_thread_name(std::thread::id id) noexcept
 {
     return thread_name::get(id);
+}
+
+void ing::sync_thread_name() noexcept
+{
+    thread_name::set_platform(std::this_thread::get_id(), get_thread_name());
 }
