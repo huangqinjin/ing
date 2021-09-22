@@ -9,6 +9,10 @@
 
 #if defined(__linux__) || defined(__APPLE__)
 #include <pthread.h>
+#elif defined(_WIN32)
+#define VC_EXTRALEAN
+#define WIN32_LEAN_AND_MEAN
+#include <Windows.h>
 #endif
 
 using namespace ing;
@@ -90,6 +94,21 @@ namespace
 #  else
             return 0 == pthread_setname_np(reinterpret_cast<pthread_t&>(id), buf);
 #  endif
+#elif defined(_WIN32)
+            static_assert(sizeof(DWORD) == sizeof(std::thread::id));
+            if (HANDLE hThread = (id == std::this_thread::get_id()) ? GetCurrentThread() :
+                OpenThread(THREAD_QUERY_LIMITED_INFORMATION, FALSE, reinterpret_cast<DWORD&>(id)))
+            {
+                finally _ = [&] {
+                    if (hThread != GetCurrentThread()) CloseHandle(hThread);
+                };
+
+                std::wstring desc;
+                desc.resize(MultiByteToWideChar(CP_UTF8, 0, name.data(), (int)name.size(), NULL, 0));
+                MultiByteToWideChar(CP_UTF8, 0, name.data(), (int)name.size(), desc.data(), (int)desc.size());
+                return S_OK == SetThreadDescription(hThread, desc.c_str());
+            }
+            return false;
 #else
             return false;
 #endif
@@ -101,6 +120,27 @@ namespace
             char buf[16]{};
             pthread_getname_np(reinterpret_cast<pthread_t&>(id), buf, sizeof(buf));
             return buf;
+#elif defined(_WIN32)
+            if (HANDLE hThread = (id == std::this_thread::get_id()) ? GetCurrentThread() :
+                OpenThread(THREAD_QUERY_LIMITED_INFORMATION, FALSE, reinterpret_cast<DWORD&>(id)))
+            {
+                PWSTR desc = NULL;
+                
+                finally _ = [&] {
+                    if (hThread != GetCurrentThread()) CloseHandle(hThread);
+                    if (desc) LocalFree(desc);
+                };
+
+                if (S_OK == GetThreadDescription(hThread, &desc))
+                {
+                    std::string s;
+                    std::size_t len = std::wcslen(desc);
+                    s.resize(WideCharToMultiByte(CP_UTF8, 0, desc, (int)len, NULL, 0, NULL, NULL));
+                    WideCharToMultiByte(CP_UTF8, 0, desc, (int)len, s.data(), (int)s.size(), NULL, NULL);
+                    return string(s);
+                }
+            }
+            return {};
 #else
             return {};
 #endif
