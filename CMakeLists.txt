@@ -27,6 +27,9 @@ macro(ing_add_library name)
 endmacro()
 
 
+set(THREADS_PREFER_PTHREAD_FLAG TRUE)
+find_package(Threads REQUIRED)
+
 find_package(Boost REQUIRED COMPONENTS
     timer
 )
@@ -37,6 +40,9 @@ ing_add_library(uptime src/uptime.cpp)
 target_link_libraries(${PROJECT_NAME} PUBLIC Boost::timer)
 
 ing_add_library(string src/string.cpp)
+
+ing_add_library(threading src/threading.cpp)
+target_link_libraries(${PROJECT_NAME} PUBLIC ${PACKAGE_NAME}::string Threads::Threads)
 
 
 if(BUILD_TESTING)
