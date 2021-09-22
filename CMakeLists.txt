@@ -36,6 +36,8 @@ ing_add_interface(source_location Boost::headers)
 ing_add_library(uptime src/uptime.cpp)
 target_link_libraries(${PROJECT_NAME} PUBLIC Boost::timer)
 
+ing_add_library(string src/string.cpp)
+
 
 if(BUILD_TESTING)
     enable_testing()
