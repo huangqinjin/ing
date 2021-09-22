@@ -10,6 +10,7 @@ namespace ing
     void set_thread_name(std::thread::id id, string name) noexcept;
     string get_thread_name() noexcept;
     string get_thread_name(std::thread::id id) noexcept;
+    void sync_thread_name() noexcept;
 };
 
 #endif
