@@ -16,3 +16,5 @@ ing_add_test(source_location test_std_source_location.cpp)
 
 ing_add_test(uptime)
 
+ing_add_test(threading)
+
