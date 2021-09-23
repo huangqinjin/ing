@@ -45,6 +45,14 @@ ing_add_library(threading src/threading.cpp)
 target_link_libraries(${PROJECT_NAME} PUBLIC ${PACKAGE_NAME}::string Threads::Threads)
 
 
+find_package(JNI QUIET)
+if(JNI_FOUND)
+    ing_add_library(jmain OBJECT src/jmain.cpp)
+    target_include_directories(${PROJECT_NAME} PUBLIC ${JNI_INCLUDE_DIRS})
+    target_link_libraries(${PROJECT_NAME} PUBLIC ${JNI_LIBRARIES})
+endif()
+
+
 if(BUILD_TESTING)
     enable_testing()
     add_subdirectory(test)
