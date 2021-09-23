@@ -11,6 +11,24 @@ macro(ing_add_test name)
     add_test(NAME ${PROJECT_NAME} COMMAND ${PROJECT_NAME})
 endmacro()
 
+macro(ing_java_test name)
+    project(${TEST}_${name})
+    if(NOT TARGET ${PACKAGE_NAME}::jmain)
+        return()
+    endif()
+
+    add_library(${PROJECT_NAME} SHARED test.cpp test_${name}.cpp)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE MODULE=$<UPPER_CASE:${name}>)
+    target_link_libraries(${PROJECT_NAME} PRIVATE Boost::unit_test_framework ${PACKAGE_NAME}::jmain)
+    if(TARGET ${PACKAGE_NAME}::${name})
+        target_link_libraries(${PROJECT_NAME} PRIVATE ${PACKAGE_NAME}::${name})
+    endif()
+
+    add_test(NAME ${PROJECT_NAME} COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_LIST_DIR}/java.cmake --
+        JniMain.java ${PROJECT_NAME} ${ARGN}
+    )
+endmacro()
+
 
 ing_add_test(source_location test_std_source_location.cpp)
 
@@ -18,3 +36,4 @@ ing_add_test(uptime)
 
 ing_add_test(threading)
 
+ing_java_test(jmain)
