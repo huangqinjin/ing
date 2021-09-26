@@ -6,6 +6,7 @@
 #include <string_view>
 #include <type_traits>
 
+#include <boost/log/keywords/log_source.hpp>
 #include <boost/log/sources/severity_feature.hpp>
 
 namespace ing::logging
@@ -161,6 +162,83 @@ namespace ing::logging::sources
         struct apply
         {
             typedef basic_severity_logger<BaseT, LevelT> type;
+        };
+    };
+
+    // Refer to:
+    // boost::log::sources::basic_severity_logger
+    // boost::log::sources::basic_channel_logger
+    template<typename BaseT, typename LocationT>
+    class basic_location_logger : public BaseT
+    {
+    public:
+        using location_attribute = attributes::thread_specific<LocationT>;
+
+    private:
+        using base_type = BaseT;
+        location_attribute location;
+
+    public:
+        basic_location_logger()
+        {
+            base_type::add_attribute_unlocked(boost::log::aux::default_attribute_names::line_id(), location);
+        }
+
+        basic_location_logger(basic_location_logger const& that)
+            : base_type(static_cast<const base_type&>(that))
+        {
+            // Our attributes must refer to our severity attribute
+            base_type::attributes()[boost::log::aux::default_attribute_names::line_id()] = location;
+        }
+
+        basic_location_logger(basic_location_logger&& that) noexcept
+            : base_type(static_cast<base_type&&>(that)), location(std::move(that.location))
+        {
+
+        }
+
+        template< typename ArgsT >
+        explicit basic_location_logger(ArgsT const& args) : base_type(args)
+        {
+            base_type::add_attribute_unlocked(boost::log::aux::default_attribute_names::line_id(), location);
+        }
+
+    protected:
+        template<typename ArgsT>
+        boost::log::record open_record_unlocked(ArgsT const& args)
+        {
+            return open_record_with_location_unlocked(args,
+                   args[boost::log::keywords::log_source | boost::parameter::void_()]);
+        }
+
+        void swap_unlocked(basic_location_logger& that)
+        {
+            base_type::swap_unlocked(static_cast<base_type&>(that));
+            location.swap(that.location);
+        }
+
+    private:
+        template<typename ArgsT, typename T>
+        boost::log::record open_record_with_location_unlocked(ArgsT const& args, T const& loc)
+        {
+            location.set(loc);
+            return base_type::open_record_unlocked(args);
+        }
+
+        template<typename ArgsT>
+        boost::log::record open_record_with_location_unlocked(ArgsT const& args, boost::parameter::void_)
+        {
+            return base_type::open_record_unlocked(args);
+        }
+    };
+
+    template<typename LocationT>
+    struct location
+    {
+        template<typename BaseT>
+        struct apply
+        {
+            typedef basic_location_logger<BaseT, LocationT> type;
         };
     };
 }
