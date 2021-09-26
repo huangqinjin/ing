@@ -31,7 +31,7 @@ set(THREADS_PREFER_PTHREAD_FLAG TRUE)
 find_package(Threads REQUIRED)
 
 find_package(Boost REQUIRED COMPONENTS
-    timer
+    timer log
 )
 
 ing_add_interface(source_location Boost::headers)
@@ -51,6 +51,10 @@ if(JNI_FOUND)
     target_include_directories(${PROJECT_NAME} PUBLIC ${JNI_INCLUDE_DIRS})
     target_link_libraries(${PROJECT_NAME} PUBLIC ${JNI_LIBRARIES})
 endif()
+
+
+ing_add_library(logging src/logging.cpp)
+target_link_libraries(${PROJECT_NAME} PUBLIC Boost::log)
 
 
 if(BUILD_TESTING)
