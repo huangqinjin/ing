@@ -9,8 +9,13 @@
 #include <boost/log/keywords/log_source.hpp>
 #include <boost/log/sources/severity_feature.hpp>
 #include <boost/log/sources/channel_feature.hpp>
-#include <boost/log/sources/basic_logger.hpp>
+#include <boost/log/sources/logger.hpp>
+#include <boost/log/sources/record_ostream.hpp>
+#include <boost/log/sources/global_logger_storage.hpp>
 #include <boost/mp11/map.hpp>
+
+#include "source_location.hpp"
+
 
 namespace ing::logging
 {
@@ -280,5 +285,57 @@ namespace ing::logging::sources
         }
     };
 }
+
+namespace ing
+{
+    template<typename ThreadingModelT>
+    class basic_logger : public logging::sources::basic_severity_channel_location_logger<
+            char, ThreadingModelT, logging::severity_level, std::string, source_location>
+    {
+    public:
+        using logger_base = typename basic_logger::final_type;
+        using typename logger_base::severity_level;
+
+        template<typename ...Args>
+        explicit basic_logger(typename logger_base::channel_type channel,
+                              severity_level min_level = severity_level::trace,
+                              Args&&... args)
+            : logger_base(boost::log::keywords::channel = std::move(channel),
+                          boost::log::keywords::severity = min_level,
+                          std::forward<Args>(args)...) {}
+    };
+
+    using logger = basic_logger<boost::log::sources::logger::threading_model>;
+    using logger_mt = basic_logger<boost::log::sources::logger_mt::threading_model>;
+
+    BOOST_LOG_GLOBAL_LOGGER(global_logger, logger_mt)
+}
+
+// Generic logging macro with specified logger instance and dynamic severity
+#define ING_LOG_SEV(logger, sev) BOOST_LOG_STREAM_WITH_PARAMS((logger), \
+                                 (::boost::log::keywords::severity = (sev)) \
+                                 (::boost::log::keywords::log_source = ING_CURRENT_LOCATION()))
+
+// Generic logging macro with specified logger instance and static severity
+#define ING_LOG(logger, sev) ING_LOG_SEV((logger), ::ing::logging::severity_level::sev)
+
+
+// Global logging macro with dynamic severity
+#define ING_GLOG_SEV(sev) ING_LOG_SEV(::ing::global_logger::get(), (sev))
+
+// Global logging macro with static severity
+#define ING_GLOG(sev) ING_GLOG_SEV(::ing::logging::severity_level::sev)
+
+
+#ifndef ING_LOCAL_LOGGER
+#define ING_LOCAL_LOGGER logger
+#endif
+
+// Local logging macro with dynamic severity
+#define ING_LLOG_SEV(sev) ING_LOG_SEV((ING_LOCAL_LOGGER), (sev))
+
+// Local logging macro with static severity
+#define ING_LLOG(sev) ING_LLOG_SEV(::ing::logging::severity_level::sev)
+
 
 #endif

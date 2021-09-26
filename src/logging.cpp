@@ -69,3 +69,8 @@ namespace ing::logging
     }
 }
 
+namespace ing
+{
+    BOOST_LOG_GLOBAL_LOGGER_CTOR_ARGS(global_logger, logger_mt, ("global"))
+}
+
