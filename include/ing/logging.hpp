@@ -8,6 +8,9 @@
 
 #include <boost/log/keywords/log_source.hpp>
 #include <boost/log/sources/severity_feature.hpp>
+#include <boost/log/sources/channel_feature.hpp>
+#include <boost/log/sources/basic_logger.hpp>
+#include <boost/mp11/map.hpp>
 
 namespace ing::logging
 {
@@ -240,6 +243,41 @@ namespace ing::logging::sources
         {
             typedef basic_location_logger<BaseT, LocationT> type;
         };
+    };
+}
+
+namespace ing::logging::sources
+{
+    template<typename CharT, typename ThreadingModelT, typename LevelT, typename ChannelT, typename LocationT>
+    class basic_severity_channel_location_logger :
+        public boost::log::sources::basic_composite_logger<
+            CharT,
+            basic_severity_channel_location_logger<CharT, ThreadingModelT, LevelT, ChannelT, LocationT>,
+            ThreadingModelT,
+            boost::log::sources::features<
+                severity<LevelT>,
+                boost::log::sources::channel<ChannelT>,
+                location<LocationT>
+            >
+        >
+    {
+        BOOST_LOG_FORWARD_LOGGER_MEMBERS_TEMPLATE(basic_severity_channel_location_logger)
+
+    public:
+        boost::log::record open_record(LocationT location = LocationT::current())
+        {
+            return open_record(boost::parameter::aux::empty_arg_list(), location);
+        }
+
+        template<typename ArgsT>
+        boost::log::record open_record(ArgsT const& args, LocationT location = LocationT::current())
+        {
+            using base_type = typename basic_severity_channel_location_logger::logger_base;
+            if constexpr(boost::mp11::mp_map_contains<ArgsT, boost::log::keywords::tag::log_source>::value)
+                return base_type::open_record(args);
+            else
+                return base_type::open_record((args, boost::log::keywords::log_source = location));
+        }
     };
 }
 
