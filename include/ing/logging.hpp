@@ -309,6 +309,8 @@ namespace ing
     using logger_mt = basic_logger<boost::log::sources::logger_mt::threading_model>;
 
     BOOST_LOG_GLOBAL_LOGGER(global_logger, logger_mt)
+
+    void init_logging();
 }
 
 // Generic logging macro with specified logger instance and dynamic severity
