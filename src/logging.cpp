@@ -7,7 +7,15 @@
 #include <boost/log/attributes/current_process_id.hpp>
 #include <boost/log/attributes/current_process_name.hpp>
 
+#include <boost/phoenix/operator.hpp>
 #include <boost/log/expressions/keyword.hpp>
+#include <boost/log/expressions/message.hpp>
+#include <boost/log/expressions/formatters/stream.hpp>
+#include <boost/log/expressions/formatters/date_time.hpp>
+#include <boost/log/expressions/formatters/auto_newline.hpp>
+
+#include <boost/log/support/date_time.hpp>
+#include <boost/log/utility/setup/console.hpp>
 
 
 namespace ing::logging
@@ -139,5 +147,22 @@ void ing::init_logging()
     core->add_global_attribute(logging::expressions::thread_name_type::get_name(), logging::attributes::current_thread_name());
     core->add_global_attribute(logging::expressions::process_name_type::get_name(), logging::attributes::current_process_name());
     core->add_global_attribute(logging::expressions::scope_type::get_name(), logging::attributes::named_scope());
+
+    // https://www.boost.org/doc/libs/develop/libs/log/doc/html/log/detailed/expressions.html#log.detailed.expressions.formatters
+    // stream-style syntax usually results in a faster formatter than the one constructed with the Boost.Format-style.
+    auto fmt = boost::log::expressions::stream
+            << boost::log::expressions::format_date_time(logging::expressions::timestamp, "%H:%M:%S.%f") << ' '
+            << '[' << logging::expressions::severity << ']' << ' '
+            << '<' << logging::expressions::channel << '>' << ' '
+            << '-' << ' '
+            << boost::log::expressions::smessage
+            << boost::log::expressions::auto_newline;
+
+    boost::log::add_console_log(std::clog,
+        boost::log::keywords::auto_newline_mode = boost::log::sinks::disabled_auto_newline,
+        boost::log::keywords::auto_flush = true,
+        // boost::log::keywords::filter = ,
+        boost::log::keywords::format = fmt
+    );
 }
 
