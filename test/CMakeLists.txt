@@ -38,3 +38,5 @@ ing_add_test(uptime)
 ing_add_test(threading)
 
 ing_java_test(jmain)
+
+ing_add_test(logging)
