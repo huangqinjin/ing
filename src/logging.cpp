@@ -10,6 +10,7 @@
 #include <boost/phoenix/operator.hpp>
 #include <boost/log/expressions/keyword.hpp>
 #include <boost/log/expressions/message.hpp>
+#include <boost/log/expressions/formatters/if.hpp>
 #include <boost/log/expressions/formatters/stream.hpp>
 #include <boost/log/expressions/formatters/date_time.hpp>
 #include <boost/log/expressions/formatters/named_scope.hpp>
@@ -192,7 +193,19 @@ void ing::init_logging()
             << logging::expressions::format_source_location(logging::expressions::location, "%F(%l) '%n'") << ' '
             << '-' << ' '
             << boost::log::expressions::smessage
-            << boost::log::expressions::auto_newline;
+            << boost::log::expressions::auto_newline
+            << boost::log::expressions::if_(logging::expressions::severity >= logging::expressions::severity_type::value_type::fatal)
+               [
+                    boost::log::expressions::stream
+                    << boost::log::expressions::format_named_scope(
+                           logging::expressions::scope,
+                           boost::log::keywords::format = "\t <- %f(%l) '%n'",
+                           boost::log::keywords::delimiter = "\n",
+                           boost::log::keywords::depth = 8,
+                           boost::log::keywords::incomplete_marker = "\n\t <- ...",
+                           boost::log::keywords::iteration = boost::log::expressions::reverse)
+                    << '\n'
+               ];
 
     boost::log::add_console_log(std::clog,
         boost::log::keywords::auto_newline_mode = boost::log::sinks::disabled_auto_newline,
