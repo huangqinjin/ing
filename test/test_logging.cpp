@@ -1,15 +1,68 @@
 #include <boost/test/unit_test.hpp>
 
+#include <boost/mpl/list.hpp>
+
 #include <boost/log/attributes/named_scope.hpp>
+
+#include <boost/log/utility/setup/console.hpp>
 
 #include <ing/logging.hpp>
 
+namespace utf = boost::unit_test;
 
-BOOST_AUTO_TEST_CASE(default_settings)
+struct DefaultSetting
+{
+    DefaultSetting()
+    {
+        BOOST_TEST_MESSAGE("default setting");
+        ing::init_logging();
+    }
+};
+
+struct DefaultFormatterTemplate
+{
+    DefaultFormatterTemplate()
+    {
+        BOOST_TEST_MESSAGE("default formatter template");
+        ing::init_logging();
+        boost::log::core::get()->remove_all_sinks();
+        boost::log::add_console_log(std::clog,
+            boost::log::keywords::auto_newline_mode = boost::log::sinks::insert_if_missing,
+            boost::log::keywords::auto_flush = true,
+            boost::log::keywords::format = "%Default%"
+        );
+    }
+};
+
+struct CustomFormatterTemplate
+{
+    CustomFormatterTemplate()
+    {
+        BOOST_TEST_MESSAGE("custom formatter template");
+        ing::init_logging();
+        boost::log::core::get()->remove_all_sinks();
+        boost::log::add_console_log(std::clog,
+            boost::log::keywords::auto_newline_mode = boost::log::sinks::insert_if_missing,
+            boost::log::keywords::auto_flush = true,
+            boost::log::keywords::format =
+                "%TimeStamp(format=\"%d/%b/%y %I:%M:%S.%f %p\")% "
+                "[%Severity%] <%Channel%> "
+                "%LineID(format=\"%F:%l\")% "
+                "'%Scope(format=\"%n\",depth=1,incomplete_marker=\"\")%' "
+                "- %Message%"
+        );
+    }
+};
+
+using Settings = boost::mpl::list<
+    DefaultSetting,
+    DefaultFormatterTemplate,
+    CustomFormatterTemplate
+>;
+
+BOOST_FIXTURE_TEST_CASE_TEMPLATE(logging, Setting, Settings, Setting)
 {
     BOOST_LOG_FUNCTION();
-
-    ing::init_logging();
 
     ing::logger logger("local");
 
