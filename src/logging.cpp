@@ -189,6 +189,10 @@ void ing::init_logging()
     auto fmt = boost::log::expressions::stream
             << boost::log::expressions::format_date_time(logging::expressions::timestamp, "%H:%M:%S.%f") << ' '
             << '[' << logging::expressions::severity << ']' << ' '
+            << boost::log::expressions::if_(
+                   logging::expressions::severity == logging::expressions::severity_type::value_type::info ||
+                   logging::expressions::severity == logging::expressions::severity_type::value_type::warn
+               )[boost::log::expressions::stream << ' ']
             << '<' << logging::expressions::channel << '>' << ' '
             << logging::expressions::format_source_location(logging::expressions::location, "%F(%l) '%n'") << ' '
             << '-' << ' '
