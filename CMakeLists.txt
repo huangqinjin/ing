@@ -31,7 +31,7 @@ set(THREADS_PREFER_PTHREAD_FLAG TRUE)
 find_package(Threads REQUIRED)
 
 find_package(Boost REQUIRED COMPONENTS
-    timer log
+    timer log log_setup
 )
 
 ing_add_interface(source_location Boost::headers)
@@ -54,7 +54,7 @@ endif()
 
 
 ing_add_library(logging src/logging.cpp)
-target_link_libraries(${PROJECT_NAME} PUBLIC Boost::log)
+target_link_libraries(${PROJECT_NAME} PUBLIC Boost::log Boost::log_setup)
 
 
 if(BUILD_TESTING)

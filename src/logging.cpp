@@ -19,6 +19,7 @@
 
 #include <boost/log/support/date_time.hpp>
 #include <boost/log/utility/setup/console.hpp>
+#include <boost/log/utility/setup/formatter_parser.hpp>
 
 
 namespace ing::logging
@@ -162,6 +163,96 @@ namespace ing::logging::expressions
     }
 }
 
+namespace ing::logging::setup
+{
+    // https://www.boost.org/doc/libs/develop/libs/log/doc/html/log/detailed/utilities.html#log.detailed.utilities.setup.filter_formatter
+
+    // https://www.boost.org/doc/libs/develop/libs/log/doc/html/log/tutorial/formatters.html#log.tutorial.formatters.string_templates_as_formatters
+    // Custom formatter factories to support string templates as formatters.
+
+#define ARG(name, def) const std::string& name = (iter = args.find(#name)) != args.end() ? iter->second : def
+
+    // %Default%
+    class default_formatter_factory final : public boost::log::formatter_factory<char>
+    {
+        formatter_type create_formatter(const boost::log::attribute_name& name, const args_map& args) override
+        {
+            (void) name;
+            (void) args;
+            return formatter;
+        }
+
+        const formatter_type formatter;
+
+    public:
+        explicit default_formatter_factory(formatter_type formatter) : formatter(formatter) {}
+    };
+
+    // https://www.boost.org/doc/libs/develop/libs/log/doc/html/log/detailed/expressions.html#log.detailed.expressions.formatters.date_time
+    // %TimeStamp(format="%Y-%m-%d %H:%M:%S.%f")%
+    class timestamp_formatter_factory final : public boost::log::formatter_factory<char>
+    {
+        formatter_type create_formatter(const boost::log::attribute_name& name, const args_map& args) override
+        {
+            (void) name;
+            args_map::const_iterator iter;
+            ARG(format, "%H:%M:%S.%f");
+            return boost::log::expressions::stream
+                << boost::log::expressions::format_date_time(expressions::timestamp, format);
+        }
+    };
+
+    // https://www.boost.org/doc/libs/develop/libs/log/doc/html/log/detailed/expressions.html#log.detailed.expressions.formatters.named_scope
+    // %LineID(format="%n %c %C %f %F %l")%
+    class location_formatter_factory final : public boost::log::formatter_factory<char>
+    {
+        formatter_type create_formatter(const boost::log::attribute_name& name, const args_map& args) override
+        {
+            (void) name;
+            args_map::const_iterator iter;
+            ARG(format, "%F(%l) '%n'");
+            return boost::log::expressions::stream
+                << expressions::format_source_location(expressions::location, format);
+        }
+    };
+
+    // https://www.boost.org/doc/libs/develop/libs/log/doc/html/log/detailed/expressions.html#log.detailed.expressions.formatters.named_scope
+    // %Scope(format="%n %c %C %f %F %l", iteration=reverse, delimiter="->", depth=0, incomplete_marker="...", empty_marker="")%
+    class scope_formatter_factory final : public boost::log::formatter_factory<char>
+    {
+        formatter_type create_formatter(const boost::log::attribute_name& name, const args_map& args) override
+        {
+            (void) name;
+            args_map::const_iterator iter;
+            ARG(format, "\t <- %f(%l) '%n'");
+            ARG(iteration, "reverse");
+            ARG(delimiter, "\n");
+            ARG(depth, "8");
+            ARG(incomplete_marker, "\n\t <- ...");
+            ARG(empty_marker, "");
+
+            boost::log::expressions::scope_iteration_direction direction;
+            if (iteration == "forward") direction = boost::log::expressions::forward;
+            else if (iteration == "reverse") direction = boost::log::expressions::reverse;
+            else throw std::invalid_argument(iteration);
+
+            return boost::log::expressions::stream
+                << boost::log::expressions::format_named_scope(
+                       expressions::scope,
+                       boost::log::keywords::format = format,
+                       boost::log::keywords::delimiter = delimiter,
+                       boost::log::keywords::depth = std::stoul(depth),
+                       boost::log::keywords::incomplete_marker = incomplete_marker,
+                       boost::log::keywords::empty_marker = empty_marker,
+                       boost::log::keywords::iteration = direction
+                   );
+        }
+    };
+
+#undef ARG
+}
+
+
 namespace ing
 {
     BOOST_LOG_GLOBAL_LOGGER_CTOR_ARGS(global_logger, logger_mt, ("global"))
@@ -210,6 +301,12 @@ void ing::init_logging()
                            boost::log::keywords::iteration = boost::log::expressions::reverse)
                     << '\n'
                ];
+
+    boost::log::register_formatter_factory("Default", boost::make_shared<logging::setup::default_formatter_factory>(fmt));
+    boost::log::register_formatter_factory(logging::expressions::timestamp_type::get_name(), boost::make_shared<logging::setup::timestamp_formatter_factory>());
+    boost::log::register_formatter_factory(logging::expressions::location_type::get_name(), boost::make_shared<logging::setup::location_formatter_factory>());
+    boost::log::register_formatter_factory(logging::expressions::scope_type::get_name(), boost::make_shared<logging::setup::scope_formatter_factory>());
+    boost::log::register_simple_formatter_factory<logging::expressions::severity_type::value_type, char>(logging::expressions::severity_type::get_name());
 
     boost::log::add_console_log(std::clog,
         boost::log::keywords::auto_newline_mode = boost::log::sinks::disabled_auto_newline,
