@@ -19,7 +19,11 @@
 
 #include <boost/log/support/date_time.hpp>
 #include <boost/log/utility/setup/console.hpp>
+#include <boost/log/utility/setup/from_settings.hpp>
+#include <boost/log/utility/setup/settings_parser.hpp>
 #include <boost/log/utility/setup/formatter_parser.hpp>
+
+#include <fstream>
 
 
 namespace ing::logging
@@ -165,12 +169,25 @@ namespace ing::logging::expressions
 
 namespace ing::logging::setup
 {
+    template<typename KeywordType>
+    void register_simple_formatter_factory()
+    {
+        boost::log::register_simple_formatter_factory<typename KeywordType::value_type, char>(KeywordType::get_name());
+    }
+
+    boost::log::expressions::scope_iteration_direction scope_iteration_direction_from_string(const std::string& iteration)
+    {
+        if (iteration == "forward") return boost::log::expressions::forward;
+        else if (iteration == "reverse") return boost::log::expressions::reverse;
+        else throw std::invalid_argument(iteration);
+    }
+
     // https://www.boost.org/doc/libs/develop/libs/log/doc/html/log/detailed/utilities.html#log.detailed.utilities.setup.filter_formatter
 
     // https://www.boost.org/doc/libs/develop/libs/log/doc/html/log/tutorial/formatters.html#log.tutorial.formatters.string_templates_as_formatters
     // Custom formatter factories to support string templates as formatters.
 
-#define ARG(name, def) const std::string& name = (iter = args.find(#name)) != args.end() ? iter->second : def
+#define ARG(name) const std::string& name = (iter = args.find(#name)) != args.end() ? iter->second : this->name
 
     // %Default%
     class default_formatter_factory final : public boost::log::formatter_factory<char>
@@ -196,10 +213,13 @@ namespace ing::logging::setup
         {
             (void) name;
             args_map::const_iterator iter;
-            ARG(format, "%H:%M:%S.%f");
+            ARG(format);
             return boost::log::expressions::stream
                 << boost::log::expressions::format_date_time(expressions::timestamp, format);
         }
+
+    public:
+        std::string format;
     };
 
     // https://www.boost.org/doc/libs/develop/libs/log/doc/html/log/detailed/expressions.html#log.detailed.expressions.formatters.named_scope
@@ -210,10 +230,13 @@ namespace ing::logging::setup
         {
             (void) name;
             args_map::const_iterator iter;
-            ARG(format, "%F(%l) '%n'");
+            ARG(format);
             return boost::log::expressions::stream
                 << expressions::format_source_location(expressions::location, format);
         }
+
+    public:
+        std::string format;
     };
 
     // https://www.boost.org/doc/libs/develop/libs/log/doc/html/log/detailed/expressions.html#log.detailed.expressions.formatters.named_scope
@@ -224,17 +247,12 @@ namespace ing::logging::setup
         {
             (void) name;
             args_map::const_iterator iter;
-            ARG(format, "\t <- %f(%l) '%n'");
-            ARG(iteration, "reverse");
-            ARG(delimiter, "\n");
-            ARG(depth, "8");
-            ARG(incomplete_marker, "\n\t <- ...");
-            ARG(empty_marker, "");
-
-            boost::log::expressions::scope_iteration_direction direction;
-            if (iteration == "forward") direction = boost::log::expressions::forward;
-            else if (iteration == "reverse") direction = boost::log::expressions::reverse;
-            else throw std::invalid_argument(iteration);
+            ARG(format);
+            ARG(iteration);
+            ARG(delimiter);
+            ARG(depth);
+            ARG(incomplete_marker);
+            ARG(empty_marker);
 
             return boost::log::expressions::stream
                 << boost::log::expressions::format_named_scope(
@@ -244,9 +262,17 @@ namespace ing::logging::setup
                        boost::log::keywords::depth = std::stoul(depth),
                        boost::log::keywords::incomplete_marker = incomplete_marker,
                        boost::log::keywords::empty_marker = empty_marker,
-                       boost::log::keywords::iteration = direction
+                       boost::log::keywords::iteration = scope_iteration_direction_from_string(iteration)
                    );
         }
+
+    public:
+        std::string format;
+        std::string iteration;
+        std::string delimiter;
+        std::string depth;
+        std::string empty_marker;
+        std::string incomplete_marker;
     };
 
 #undef ARG
@@ -256,9 +282,36 @@ namespace ing::logging::setup
 namespace ing
 {
     BOOST_LOG_GLOBAL_LOGGER_CTOR_ARGS(global_logger, logger_mt, ("global"))
+
+
+    void init_logging(const boost::log::settings& settings);
+
+    void init_logging_from_settings(void const * settings)
+    {
+        auto setts = static_cast<const boost::log::settings*>(settings);
+        init_logging(setts ? *setts : boost::log::settings{});
+    }
+
+    void init_logging_from_stream(std::istream& in)
+    {
+        init_logging(boost::log::parse_settings(in));
+    }
+
+    void init_logging(const std::string& file)
+    {
+        if (file.empty())
+        {
+            init_logging_from_settings(nullptr);
+        }
+        else
+        {
+            std::ifstream in(file);
+            init_logging_from_stream(in);
+        }
+    }
 }
 
-void ing::init_logging()
+void ing::init_logging(const boost::log::settings& settings)
 {
     //boost::log::add_common_attributes();
     auto core = boost::log::core::get();
@@ -275,38 +328,58 @@ void ing::init_logging()
     core->add_global_attribute(logging::expressions::process_name_type::get_name(), logging::attributes::current_process_name());
     core->add_global_attribute(logging::expressions::scope_type::get_name(), logging::attributes::named_scope());
 
+
+    auto timestamp_formatter_factory = boost::make_shared<logging::setup::timestamp_formatter_factory>();
+    auto location_formatter_factory = boost::make_shared<logging::setup::location_formatter_factory>();
+    auto scope_formatter_factory = boost::make_shared<logging::setup::scope_formatter_factory>();
+
+    timestamp_formatter_factory->format = settings["Attributes"]["TimeStamp"]["format"].or_default("%H:%M:%S.%f");
+    location_formatter_factory->format = settings["Attributes"]["LineID"]["format"].or_default("%F(%l) '%n'");
+    scope_formatter_factory->format = settings["Attributes"]["Scope"]["format"].or_default("\t <- %f(%l) '%n'");
+    scope_formatter_factory->iteration = settings["Attributes"]["Scope"]["iteration"].or_default("reverse");
+    scope_formatter_factory->depth = settings["Attributes"]["Scope"]["depth"].or_default("8");
+    scope_formatter_factory->delimiter = settings["Attributes"]["Scope"]["delimiter"].or_default("\n");
+    scope_formatter_factory->empty_marker = settings["Attributes"]["Scope"]["empty_marker"].or_default("");
+    scope_formatter_factory->incomplete_marker = settings["Attributes"]["Scope"]["incomplete_marker"].or_default("\n\t <- ...");
+    auto scope_level = settings["Attributes"]["Scope"]["level"].or_default(logging::expressions::severity_type::value_type::error);
+
     // https://www.boost.org/doc/libs/develop/libs/log/doc/html/log/detailed/expressions.html#log.detailed.expressions.formatters
     // stream-style syntax usually results in a faster formatter than the one constructed with the Boost.Format-style.
     auto fmt = boost::log::expressions::stream
-            << boost::log::expressions::format_date_time(logging::expressions::timestamp, "%H:%M:%S.%f") << ' '
+            << boost::log::expressions::format_date_time(logging::expressions::timestamp, timestamp_formatter_factory->format) << ' '
             << '[' << logging::expressions::severity << ']' << ' '
             << boost::log::expressions::if_(
                    logging::expressions::severity == logging::expressions::severity_type::value_type::info ||
                    logging::expressions::severity == logging::expressions::severity_type::value_type::warn
                )[boost::log::expressions::stream << ' ']
             << '<' << logging::expressions::channel << '>' << ' '
-            << logging::expressions::format_source_location(logging::expressions::location, "%F(%l) '%n'") << ' '
+            << logging::expressions::format_source_location(logging::expressions::location, location_formatter_factory->format) << ' '
             << '-' << ' '
             << boost::log::expressions::smessage
             << boost::log::expressions::auto_newline
-            << boost::log::expressions::if_(logging::expressions::severity >= logging::expressions::severity_type::value_type::fatal)
+            << boost::log::expressions::if_(logging::expressions::severity > scope_level)
                [
                     boost::log::expressions::stream
                     << boost::log::expressions::format_named_scope(
                            logging::expressions::scope,
-                           boost::log::keywords::format = "\t <- %f(%l) '%n'",
-                           boost::log::keywords::delimiter = "\n",
-                           boost::log::keywords::depth = 8,
-                           boost::log::keywords::incomplete_marker = "\n\t <- ...",
-                           boost::log::keywords::iteration = boost::log::expressions::reverse)
+                           boost::log::keywords::format = scope_formatter_factory->format,
+                           boost::log::keywords::delimiter = scope_formatter_factory->delimiter,
+                           boost::log::keywords::depth = std::stoul(scope_formatter_factory->depth),
+                           boost::log::keywords::empty_marker = scope_formatter_factory->empty_marker,
+                           boost::log::keywords::incomplete_marker = scope_formatter_factory->incomplete_marker,
+                           boost::log::keywords::iteration = logging::setup::scope_iteration_direction_from_string(
+                                   scope_formatter_factory->iteration))
                     << '\n'
                ];
 
     boost::log::register_formatter_factory("Default", boost::make_shared<logging::setup::default_formatter_factory>(fmt));
-    boost::log::register_formatter_factory(logging::expressions::timestamp_type::get_name(), boost::make_shared<logging::setup::timestamp_formatter_factory>());
-    boost::log::register_formatter_factory(logging::expressions::location_type::get_name(), boost::make_shared<logging::setup::location_formatter_factory>());
-    boost::log::register_formatter_factory(logging::expressions::scope_type::get_name(), boost::make_shared<logging::setup::scope_formatter_factory>());
-    boost::log::register_simple_formatter_factory<logging::expressions::severity_type::value_type, char>(logging::expressions::severity_type::get_name());
+    boost::log::register_formatter_factory(logging::expressions::timestamp_type::get_name(), timestamp_formatter_factory);
+    boost::log::register_formatter_factory(logging::expressions::location_type::get_name(), location_formatter_factory);
+    boost::log::register_formatter_factory(logging::expressions::scope_type::get_name(), scope_formatter_factory);
+    logging::setup::register_simple_formatter_factory<logging::expressions::severity_type>();
+
+    boost::log::init_from_settings(settings);
+    if (settings.has_section("Sinks")) return;
 
     boost::log::add_console_log(std::clog,
         boost::log::keywords::auto_newline_mode = boost::log::sinks::disabled_auto_newline,
