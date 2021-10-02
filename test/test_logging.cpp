@@ -65,9 +65,9 @@ struct ThresholdPerLogger
         std::istringstream in(
 R"INI(
 [Thresholds]
-global = WARN
-local = DEBUG
-local = ERROR
+WARN = global  # global will be TRACE as it has already been initialized.
+WARN = "lo.*"  # local will be WARN.
+ERROR = local
 )INI");
 
         ing::init_logging_from_stream(in);

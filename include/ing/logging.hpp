@@ -33,6 +33,7 @@ namespace ing::logging
     bool from_string(std::string_view str, severity_level& level) noexcept;
     std::ostream& operator<<(std::ostream& os, severity_level level);
     std::istream& operator>>(std::istream& is, severity_level& level);
+    severity_level minimum_severity_level(std::string_view channel);
 }
 
 namespace ing::logging::attributes
@@ -297,12 +298,16 @@ namespace ing
         using typename logger_base::severity_level;
 
         template<typename ...Args>
-        explicit basic_logger(typename logger_base::channel_type channel,
-                              severity_level min_level = severity_level::trace,
-                              Args&&... args)
+        basic_logger(typename logger_base::channel_type channel,
+                     severity_level min_level, Args&&... args)
             : logger_base(boost::log::keywords::channel = std::move(channel),
                           boost::log::keywords::severity = min_level,
                           std::forward<Args>(args)...) {}
+
+        template<typename ...Args>
+        explicit basic_logger(typename logger_base::channel_type channel, Args&&... args)
+            : basic_logger(std::move(channel), logging::minimum_severity_level(channel),
+                           std::forward<Args>(args)...) {}
     };
 
     using logger = basic_logger<boost::log::sources::logger::threading_model>;
