@@ -8,6 +8,8 @@
 
 #include <ing/logging.hpp>
 
+#include <sstream>
+
 namespace utf = boost::unit_test;
 
 struct DefaultSetting
@@ -54,10 +56,29 @@ struct CustomFormatterTemplate
     }
 };
 
+struct ThresholdPerLogger
+{
+    ThresholdPerLogger()
+    {
+        BOOST_TEST_MESSAGE("threshold per logger");
+
+        std::istringstream in(
+R"INI(
+[Thresholds]
+global = WARN
+local = DEBUG
+local = ERROR
+)INI");
+
+        ing::init_logging_from_stream(in);
+    }
+};
+
 using Settings = boost::mpl::list<
     DefaultSetting,
     DefaultFormatterTemplate,
-    CustomFormatterTemplate
+    CustomFormatterTemplate,
+    ThresholdPerLogger
 >;
 
 BOOST_FIXTURE_TEST_CASE_TEMPLATE(logging, Setting, Settings, Setting)
