@@ -16,6 +16,7 @@
 #include <boost/log/expressions/formatters/named_scope.hpp>
 #include <boost/log/expressions/formatters/auto_newline.hpp>
 #include <boost/log/expressions/formatters/wrap_formatter.hpp>
+#include <boost/log/expressions/predicates/channel_severity_filter.hpp>
 
 #include <boost/log/support/date_time.hpp>
 #include <boost/log/utility/setup/console.hpp>
@@ -328,6 +329,20 @@ void ing::init_logging(const boost::log::settings& settings)
     core->add_global_attribute(logging::expressions::process_name_type::get_name(), logging::attributes::current_process_name());
     core->add_global_attribute(logging::expressions::scope_type::get_name(), logging::attributes::named_scope());
 
+    // https://www.boost.org/doc/libs/develop/libs/log/doc/html/log/detailed/expressions.html#log.detailed.expressions.predicates.channel_severity_filter
+    if (auto severities = settings["Thresholds"].get_section())
+    {
+        auto filter = boost::log::expressions::channel_severity_filter(
+                logging::expressions::channel,
+                logging::expressions::severity);
+
+        for (const auto& entry : severities.property_tree())
+        {
+            filter[entry.first] = entry.second.get_value<logging::expressions::severity_type::value_type>();
+        }
+
+        core->set_filter(filter);
+    }
 
     auto timestamp_formatter_factory = boost::make_shared<logging::setup::timestamp_formatter_factory>();
     auto location_formatter_factory = boost::make_shared<logging::setup::location_formatter_factory>();
