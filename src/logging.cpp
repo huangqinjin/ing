@@ -16,7 +16,6 @@
 #include <boost/log/expressions/formatters/named_scope.hpp>
 #include <boost/log/expressions/formatters/auto_newline.hpp>
 #include <boost/log/expressions/formatters/wrap_formatter.hpp>
-#include <boost/log/expressions/predicates/channel_severity_filter.hpp>
 
 #include <boost/log/support/date_time.hpp>
 #include <boost/log/utility/setup/console.hpp>
@@ -25,6 +24,7 @@
 #include <boost/log/utility/setup/formatter_parser.hpp>
 
 #include <fstream>
+#include <regex>
 
 
 namespace ing::logging
@@ -93,6 +93,19 @@ namespace ing::logging
         if (is >> val && !from_string(val, level))
             throw std::invalid_argument(val);
         return is;
+    }
+
+
+    static std::vector<std::pair<severity_level, std::regex>> thresholds;
+
+    severity_level minimum_severity_level(std::string_view channel)
+    {
+        for (const auto& entry : thresholds)
+        {
+            if (std::regex_match(channel.begin(), channel.end(), entry.second))
+                return entry.first;
+        }
+        return severity_level::trace;
     }
 }
 
@@ -330,18 +343,15 @@ void ing::init_logging(const boost::log::settings& settings)
     core->add_global_attribute(logging::expressions::scope_type::get_name(), logging::attributes::named_scope());
 
     // https://www.boost.org/doc/libs/develop/libs/log/doc/html/log/detailed/expressions.html#log.detailed.expressions.predicates.channel_severity_filter
+    logging::thresholds.clear();
     if (auto severities = settings["Thresholds"].get_section())
     {
-        auto filter = boost::log::expressions::channel_severity_filter(
-                logging::expressions::channel,
-                logging::expressions::severity);
-
         for (const auto& entry : severities.property_tree())
         {
-            filter[entry.first] = entry.second.get_value<logging::expressions::severity_type::value_type>();
+            auto& pair = logging::thresholds.emplace_back();
+            pair.first = boost::lexical_cast<logging::expressions::severity_type::value_type>(entry.first);
+            pair.second.assign(entry.second.get_value<std::string>());
         }
-
-        core->set_filter(filter);
     }
 
     auto timestamp_formatter_factory = boost::make_shared<logging::setup::timestamp_formatter_factory>();
