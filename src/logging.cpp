@@ -202,6 +202,7 @@ namespace ing::logging::setup
     // Custom formatter factories to support string templates as formatters.
 
 #define ARG(name) const std::string& name = (iter = args.find(#name)) != args.end() ? iter->second : this->name
+#define ARGF(name, F) const auto name = (iter = args.find(#name)) != args.end() ? F(iter->second) : this->name
 
     // %Default%
     class default_formatter_factory final : public boost::log::formatter_factory<char>
@@ -264,29 +265,40 @@ namespace ing::logging::setup
             ARG(format);
             ARG(iteration);
             ARG(delimiter);
-            ARG(depth);
+            ARGF(depth, std::stoul);
             ARG(incomplete_marker);
             ARG(empty_marker);
+            ARGF(auto_newline, boost::lexical_cast<bool>);
+            ARGF(threshold, boost::lexical_cast<logging::expressions::severity_type::value_type>);
 
             return boost::log::expressions::stream
-                << boost::log::expressions::format_named_scope(
+                << boost::log::expressions::if_(logging::expressions::severity > threshold)
+                [
+                    boost::log::expressions::stream
+                    << boost::log::expressions::if_(boost::phoenix::val(auto_newline))[
+                       boost::log::expressions::stream << boost::log::expressions::auto_newline
+                    ]
+                    << boost::log::expressions::format_named_scope(
                        expressions::scope,
                        boost::log::keywords::format = format,
                        boost::log::keywords::delimiter = delimiter,
-                       boost::log::keywords::depth = std::stoul(depth),
+                       boost::log::keywords::depth = depth,
                        boost::log::keywords::incomplete_marker = incomplete_marker,
                        boost::log::keywords::empty_marker = empty_marker,
                        boost::log::keywords::iteration = scope_iteration_direction_from_string(iteration)
-                   );
+                   )
+                ];
         }
 
     public:
         std::string format;
         std::string iteration;
         std::string delimiter;
-        std::string depth;
+        unsigned long depth;
         std::string empty_marker;
         std::string incomplete_marker;
+        bool auto_newline;
+        expressions::severity_type::value_type threshold;
     };
 
 #undef ARG
@@ -362,11 +374,12 @@ void ing::init_logging(const boost::log::settings& settings)
     location_formatter_factory->format = settings["Attributes"]["LineID"]["format"].or_default("%F(%l) '%n'");
     scope_formatter_factory->format = settings["Attributes"]["Scope"]["format"].or_default("\t <- %f(%l) '%n'");
     scope_formatter_factory->iteration = settings["Attributes"]["Scope"]["iteration"].or_default("reverse");
-    scope_formatter_factory->depth = settings["Attributes"]["Scope"]["depth"].or_default("8");
+    scope_formatter_factory->depth = settings["Attributes"]["Scope"]["depth"].or_default(8ul);
     scope_formatter_factory->delimiter = settings["Attributes"]["Scope"]["delimiter"].or_default("\n");
     scope_formatter_factory->empty_marker = settings["Attributes"]["Scope"]["empty_marker"].or_default("");
     scope_formatter_factory->incomplete_marker = settings["Attributes"]["Scope"]["incomplete_marker"].or_default("\n\t <- ...");
-    auto scope_level = settings["Attributes"]["Scope"]["level"].or_default(logging::expressions::severity_type::value_type::error);
+    scope_formatter_factory->auto_newline = settings["Attributes"]["Scope"]["auto_newline"].or_default(true);
+    scope_formatter_factory->threshold = settings["Attributes"]["Scope"]["threshold"].or_default(logging::expressions::severity_type::value_type::error);
 
     // https://www.boost.org/doc/libs/develop/libs/log/doc/html/log/detailed/expressions.html#log.detailed.expressions.formatters
     // stream-style syntax usually results in a faster formatter than the one constructed with the Boost.Format-style.
@@ -382,14 +395,14 @@ void ing::init_logging(const boost::log::settings& settings)
             << '-' << ' '
             << boost::log::expressions::smessage
             << boost::log::expressions::auto_newline
-            << boost::log::expressions::if_(logging::expressions::severity > scope_level)
+            << boost::log::expressions::if_(logging::expressions::severity > scope_formatter_factory->threshold)
                [
                     boost::log::expressions::stream
                     << boost::log::expressions::format_named_scope(
                            logging::expressions::scope,
                            boost::log::keywords::format = scope_formatter_factory->format,
                            boost::log::keywords::delimiter = scope_formatter_factory->delimiter,
-                           boost::log::keywords::depth = std::stoul(scope_formatter_factory->depth),
+                           boost::log::keywords::depth = scope_formatter_factory->depth,
                            boost::log::keywords::empty_marker = scope_formatter_factory->empty_marker,
                            boost::log::keywords::incomplete_marker = scope_formatter_factory->incomplete_marker,
                            boost::log::keywords::iteration = logging::setup::scope_iteration_direction_from_string(

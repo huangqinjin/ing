@@ -50,7 +50,7 @@ struct CustomFormatterTemplate
                 "%TimeStamp(format=\"%d/%b/%y %I:%M:%S.%f %p\")% "
                 "[%Severity%] <%Channel%> "
                 "%LineID(format=\"%F:%l\")% "
-                "'%Scope(format=\"%n\",depth=1,incomplete_marker=\"\")%' "
+                "'%Scope(format=\"%n\",depth=1,auto_newline=0,incomplete_marker=\"\")%' "
                 "- %Message%"
         );
     }
