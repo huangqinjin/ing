@@ -103,6 +103,13 @@ BOOST_FIXTURE_TEST_CASE_TEMPLATE(logging, Setting, Settings, Setting)
     ING_LLOG(error) << "An error severity message";
     ING_LLOG(fatal) << "A fatal severity message";
 
+    logger.trace() << "A trace severity message";
+    logger.debug() << "A debug severity message";
+    logger.info () << "An info severity message";
+    logger.warn () << "A warn severity message";
+    logger.error() << "An error severity message";
+    logger.fatal() << "A fatal severity message";
+
     BOOST_LOG_NAMED_SCOPE("global logger");
 
     ING_GLOG(trace) << "A trace severity message";
@@ -111,5 +118,28 @@ BOOST_FIXTURE_TEST_CASE_TEMPLATE(logging, Setting, Settings, Setting)
     ING_GLOG(warn)  << "A warn severity message";
     ING_GLOG(error) << "An error severity message";
     ING_GLOG(fatal) << "A fatal severity message";
+
+    ing::trace() << "A trace severity message";
+    ing::debug() << "A debug severity message";
+    ing::info () << "An info severity message";
+    ing::warn () << "A warn severity message";
+    ing::error() << "An error severity message";
+    ing::fatal() << "A fatal severity message";
+
+#ifdef ING_HAS_FMT
+    logger.trace("A trace severity message at line {} ", __LINE__) << __func__;
+    logger.debug("A debug severity message at line {} ", __LINE__) << __func__;
+    logger.info ("An info severity message at line {} ", __LINE__) << __func__;
+    logger.warn ("A warn severity message at line {} ", __LINE__) << __func__;
+    logger.error("An error severity message at line {} ", __LINE__) << __func__;
+    logger.fatal("A fatal severity message at line {} ", __LINE__) << __func__;
+
+    if (auto h = ing::trace("A trace severity message at line {} ", __LINE__)) h << ing::fmt::format("{}", __func__);
+    if (auto h = ing::debug("A debug severity message at line {} ", __LINE__)) h << ing::fmt::format("{}", __func__);
+    if (auto h = ing::info ("An info severity message at line {} ", __LINE__)) h << ing::fmt::format("{}", __func__);
+    if (auto h = ing::warn ("A warn severity message at line {} ", __LINE__)) h << ing::fmt::format("{}", __func__);
+    if (auto h = ing::error("An error severity message at line {} ", __LINE__)) h << ing::fmt::format("{}", __func__);
+    if (auto h = ing::fatal("A fatal severity message at line {} ", __LINE__)) h << ing::fmt::format("{}", __func__);
+#endif
 }
 

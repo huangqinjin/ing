@@ -40,3 +40,10 @@ ing_add_test(threading)
 ing_java_test(jmain)
 
 ing_add_test(logging)
+
+find_package(fmt)
+if(TARGET fmt::fmt)
+    ing_add_interface(logging_with_fmt ${PACKAGE_NAME}::logging fmt::fmt)
+    target_compile_definitions(${PROJECT_NAME} INTERFACE ING_WITH_FMT)
+    ing_add_test(logging_with_fmt)
+endif()
