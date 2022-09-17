@@ -179,6 +179,73 @@ namespace ing::logging::expressions
             }
         });
     }
+
+    const auto reset_sgr = boost::phoenix::val("\033[39;49m");
+
+    template<typename Keyword, std::size_t N>
+    auto sgr(const Keyword& keyword, const std::array<std::string, N>& table)
+    {
+        return boost::log::expressions::wrap_formatter(
+            [keyword, table](boost::log::record_view const& rec, boost::log::formatting_ostream& strm)
+            {
+                if (const auto& level = rec[keyword])
+                {
+                    auto i = static_cast<int>(*level);
+                    if (i >= 0 && i < table.size() && !table[i].empty())
+                        strm << '\033' << '[' << table[i] << 'm';
+                }
+            });
+    }
+
+    const auto strip_sgr = boost::log::expressions::wrap_formatter(
+        [](boost::log::record_view const&, boost::log::formatting_ostream& strm)
+        {
+            auto find = [](char* s)
+            {
+                char* b = nullptr;
+                char* e = nullptr;
+                while (*s)
+                {
+                    if (*s++ == '\033' && *s++ == '[')
+                    {
+                        b = s - 2;
+                        while (('0' <= *s && *s <= '9') || *s == ';') ++s;
+                        if (*s == 'm')
+                        {
+                            e = s + 1;
+                            break;
+                        }
+                    }
+                }
+                return std::make_pair(b, e);
+            };
+
+            strm.flush();
+
+            if (std::string* s = strm.rdbuf()->storage())
+            {
+                auto a = find(s->data());
+                if (a.second == nullptr) return;
+
+                while (true)
+                {
+                    auto b = find(a.second);
+
+                    if (b.second)
+                    {
+                        auto n = b.first - a.second;
+                        std::memmove(a.first, a.second, n);
+                        a.first += n;
+                        a.second = b.second;
+                    }
+                    else
+                    {
+                        s->erase(a.first - s->data(), a.second - a.first);
+                        break;
+                    }
+                }
+            }
+        });
 }
 
 namespace ing::logging::setup
@@ -301,6 +368,28 @@ namespace ing::logging::setup
         expressions::severity_type::value_type threshold;
     };
 
+    // https://en.wikipedia.org/wiki/ANSI_escape_code#SGR_(Select_Graphic_Rendition)_parameters
+    // %SGR(mode=reset|strip)%
+    class sgr_formatter_factory : public boost::log::formatter_factory<char>
+    {
+        formatter_type create_formatter(const boost::log::attribute_name& name, const args_map& args) override
+        {
+            (void) name;
+            args_map::const_iterator iter;
+            auto mode = (iter = args.find("mode")) != args.end() ? iter->second : "";
+            if (mode == "reset") return boost::log::expressions::stream
+                        << expressions::reset_sgr;
+            if (mode == "strip") return boost::log::expressions::stream
+                        << expressions::strip_sgr;
+            if (!mode.empty()) throw std::invalid_argument("invalid mode " + mode);
+            return boost::log::expressions::stream
+                    << expressions::sgr(expressions::severity, table);
+        }
+
+    public:
+        std::array<std::string, 6> table;
+    };
+
 #undef ARG
 }
 
@@ -369,6 +458,25 @@ void ing::init_logging(const boost::log::settings& settings)
     auto timestamp_formatter_factory = boost::make_shared<logging::setup::timestamp_formatter_factory>();
     auto location_formatter_factory = boost::make_shared<logging::setup::location_formatter_factory>();
     auto scope_formatter_factory = boost::make_shared<logging::setup::scope_formatter_factory>();
+    auto sgr_formatter_factory = boost::make_shared<logging::setup::sgr_formatter_factory>();
+
+    if (auto sgr = settings["Attributes"]["SGR"].get_section())
+    {
+        for (const auto& entry : sgr.property_tree())
+        {
+            auto severity = boost::lexical_cast<logging::expressions::severity_type::value_type>(entry.first);
+            sgr_formatter_factory->table.at(static_cast<std::size_t>(severity)) = entry.second.get_value<std::string>();
+        }
+    }
+    else
+    {
+        sgr_formatter_factory->table[0] = "36"; // Cyan
+        sgr_formatter_factory->table[1] = "35"; // Magenta
+        sgr_formatter_factory->table[2] = "39"; // Default
+        sgr_formatter_factory->table[3] = "33"; // Yellow
+        sgr_formatter_factory->table[4] = "31"; // Red
+        sgr_formatter_factory->table[5] = "32"; // Green
+    }
 
     timestamp_formatter_factory->format = settings["Attributes"]["TimeStamp"]["format"].or_default("%H:%M:%S.%f");
     location_formatter_factory->format = settings["Attributes"]["LineID"]["format"].or_default("%F(%l) '%n'");
@@ -384,6 +492,7 @@ void ing::init_logging(const boost::log::settings& settings)
     // https://www.boost.org/doc/libs/develop/libs/log/doc/html/log/detailed/expressions.html#log.detailed.expressions.formatters
     // stream-style syntax usually results in a faster formatter than the one constructed with the Boost.Format-style.
     auto fmt = boost::log::expressions::stream
+            << logging::expressions::sgr(logging::expressions::severity, sgr_formatter_factory->table)
             << boost::log::expressions::format_date_time(logging::expressions::timestamp, timestamp_formatter_factory->format) << ' '
             << '[' << logging::expressions::severity << ']' << ' '
             << boost::log::expressions::if_(
@@ -394,10 +503,10 @@ void ing::init_logging(const boost::log::settings& settings)
             << logging::expressions::format_source_location(logging::expressions::location, location_formatter_factory->format) << ' '
             << '-' << ' '
             << boost::log::expressions::smessage
-            << boost::log::expressions::auto_newline
             << boost::log::expressions::if_(logging::expressions::severity > scope_formatter_factory->threshold)
                [
                     boost::log::expressions::stream
+                    << boost::log::expressions::auto_newline
                     << boost::log::expressions::format_named_scope(
                            logging::expressions::scope,
                            boost::log::keywords::format = scope_formatter_factory->format,
@@ -407,20 +516,22 @@ void ing::init_logging(const boost::log::settings& settings)
                            boost::log::keywords::incomplete_marker = scope_formatter_factory->incomplete_marker,
                            boost::log::keywords::iteration = logging::setup::scope_iteration_direction_from_string(
                                    scope_formatter_factory->iteration))
-                    << '\n'
-               ];
+               ]
+            << logging::expressions::reset_sgr
+            ;
 
     boost::log::register_formatter_factory("Default", boost::make_shared<logging::setup::default_formatter_factory>(fmt));
     boost::log::register_formatter_factory(logging::expressions::timestamp_type::get_name(), timestamp_formatter_factory);
     boost::log::register_formatter_factory(logging::expressions::location_type::get_name(), location_formatter_factory);
     boost::log::register_formatter_factory(logging::expressions::scope_type::get_name(), scope_formatter_factory);
+    boost::log::register_formatter_factory("SGR", sgr_formatter_factory);
     logging::setup::register_simple_formatter_factory<logging::expressions::severity_type>();
 
     boost::log::init_from_settings(settings);
     if (settings.has_section("Sinks")) return;
 
     boost::log::add_console_log(std::clog,
-        boost::log::keywords::auto_newline_mode = boost::log::sinks::disabled_auto_newline,
+        boost::log::keywords::auto_newline_mode = boost::log::sinks::insert_if_missing,
         boost::log::keywords::auto_flush = true,
         // boost::log::keywords::filter = ,
         boost::log::keywords::format = fmt

@@ -47,11 +47,13 @@ struct CustomFormatterTemplate
             boost::log::keywords::auto_newline_mode = boost::log::sinks::insert_if_missing,
             boost::log::keywords::auto_flush = true,
             boost::log::keywords::format =
+                "%SGR%"
                 "%TimeStamp(format=\"%d/%b/%y %I:%M:%S.%f %p\")% "
                 "[%Severity%] <%Channel%> "
                 "%LineID(format=\"%F:%l\")% "
                 "'%Scope(format=\"%n\",depth=1,auto_newline=0,incomplete_marker=\"\")%' "
                 "- %Message%"
+                "%SGR(mode=reset)%"
         );
     }
 };
@@ -68,6 +70,14 @@ R"INI(
 WARN = global  # global will be TRACE as it has already been initialized.
 WARN = "lo.*"  # local will be WARN.
 ERROR = local
+
+[Attributes.SGR]
+TRACE = 36 # Cyan
+DEBUG = 35 # Magenta
+INFO  = 39 # Default
+WARN  = 33 # Yellow
+ERROR = 31 # Red
+FATAL = "31;44" # fg: Red, bg: Blue
 )INI");
 
         ing::init_logging_from_stream(in);
