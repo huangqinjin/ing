@@ -47,3 +47,5 @@ if(TARGET fmt::fmt)
     target_compile_definitions(${PROJECT_NAME} INTERFACE ING_WITH_FMT)
     ing_add_test(logging_with_fmt)
 endif()
+
+ing_add_test(timing)

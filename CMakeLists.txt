@@ -56,6 +56,9 @@ endif()
 ing_add_library(logging src/logging.cpp)
 target_link_libraries(${PROJECT_NAME} PUBLIC Boost::log Boost::log_setup)
 
+ing_add_library(timing src/timing.cpp)
+target_link_libraries(${PROJECT_NAME} PUBLIC ${PACKAGE_NAME}::uptime ${PACKAGE_NAME}::logging)
+
 
 if(BUILD_TESTING)
     enable_testing()
