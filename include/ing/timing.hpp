@@ -47,6 +47,7 @@ namespace ing
 
     public:
         static void signal(void (*sig)(const char*, int)) noexcept;
+        static void report(std::ostream& os, std::string_view regex = {});
     };
 }
 

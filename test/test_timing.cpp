@@ -25,4 +25,6 @@ BOOST_AUTO_TEST_CASE(timer)
 
         t.phase("2");
     }
+
+    ing::timer::report(std::clog << '\n', ".*");
 }
