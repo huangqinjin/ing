@@ -7,22 +7,26 @@
 #include <ing/source_location.hpp>
 
 
+static boost::test_tools::predicate_result contains(const char* str, const char* sub)
+{
+    if(std::strstr(str, sub)) return true;
+    boost::test_tools::predicate_result res(false);
+    res.message() << "[\"" << str << "\" !contains \"" << sub << "\"]";
+    return res;
+}
+
+
 BOOST_AUTO_TEST_SUITE(ING_TEST_SOURCE_LOCATION)
 
 BOOST_AUTO_TEST_CASE(current_source_location)
 {
     ing::source_location macro = ING_CURRENT_LOCATION(); std::uint_least32_t line = __LINE__;
     const char* file = __FILE__;
-    const char* function =
-#ifdef ING_NO_STD_SOURCE_LOCATION
-        BOOST_CURRENT_FUNCTION;
-#else
-        __func__;
-#endif
+    const char* func = __func__;
 
     BOOST_TEST(macro.file_name() == file);
     BOOST_TEST(macro.line() == line);
-    BOOST_TEST(macro.function_name() == function);
+    BOOST_TEST(contains(macro.function_name(), func));
 }
 
 BOOST_AUTO_TEST_CASE(modified_source_location)
