@@ -1,7 +1,8 @@
 #include <boost/test/unit_test.hpp>
 
 #include <ing/source_location.hpp>
-#ifndef ING_NO_STD_SOURCE_LOCATION
+//#ifndef ING_NO_STD_SOURCE_LOCATION
+#if 0
 #define ING_TEST_SOURCE_LOCATION with_std
 
 namespace
