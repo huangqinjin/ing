@@ -1,0 +1,109 @@
+name: Build & Run
+
+on:
+  push:
+    branches:
+      - master
+      - ci
+  pull_request:
+
+jobs:
+  linux:
+    name: g++ -std=c++${{matrix.std}}
+    runs-on: ubuntu-22.04
+
+    strategy:
+      fail-fast: true
+      matrix:
+        std: [ 17, 20 ]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Dependency
+        run: /home/linuxbrew/.linuxbrew/bin/brew install boost fmt
+
+      - name: Configure
+        run: >
+          cmake -S . -B build
+          -DCMAKE_C_COMPILER=gcc-11
+          -DCMAKE_CXX_COMPILER=g++-11
+          -DCMAKE_CXX_STANDARD=${{matrix.std}}
+          -DCMAKE_FIND_ROOT_PATH=/home/linuxbrew/.linuxbrew
+          -DBUILD_TESTING=ON
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Run
+        run: ctest --extra-verbose --test-dir build
+
+  macos:
+    name: clang++ -std=c++${{matrix.std}}
+    runs-on: macos-12
+
+    strategy:
+      fail-fast: true
+      matrix:
+        std: [ 17, 20 ]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Dependency
+        run: brew install boost fmt
+
+      - name: Configure
+        run: >
+          cmake -S . -B build
+          -DCMAKE_CXX_STANDARD=${{matrix.std}}
+          -DBUILD_TESTING=ON
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Run
+        run: ctest --extra-verbose --test-dir build
+
+  windows:
+    name: cl /std:c++${{matrix.std}}
+    runs-on: windows-2022
+
+    strategy:
+      fail-fast: true
+      matrix:
+        std: [ 17, 20 ]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Dependency
+        run: |
+          pip install conan
+          conan profile new --detect default && conan profile update settings.compiler.version=16 default
+          conan install boost/[]@ -s build_type=Debug -g CMakeDeps -if libs
+          conan install boost/[]@ -s build_type=Release -g CMakeDeps -if libs
+          conan install fmt/[]@ -s build_type=Debug -g CMakeDeps -if libs
+          conan install fmt/[]@ -s build_type=Release -g CMakeDeps -if libs
+
+      - name: Configure
+        run: >
+          cmake -S . -B build
+          -G "Visual Studio 17 2022" -A x64 -T host=x64
+          -DCMAKE_CXX_STANDARD=${{matrix.std}}
+          -DCMAKE_FIND_PACKAGE_PREFER_CONFIG=TRUE
+          -DCMAKE_PREFIX_PATH=${{github.workspace}}\libs
+          -DBUILD_TESTING=ON
+
+      - name: Build
+        run: |
+          cmake --build build --config Debug
+          cmake --build build --config Release
+
+      - name: Run
+        run: |
+          ctest --extra-verbose --test-dir build --build-config Debug
+          ctest --extra-verbose --test-dir build --build-config Release
